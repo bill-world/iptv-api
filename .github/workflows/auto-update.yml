@@ -1,0 +1,30 @@
+name: Auto update playlist
+
+# 定时触发上游的 "Generate playlist manually"（main.yml）。
+# 生成结果只经 GitHub Pages 与 Release 发布，不提交回 Git 仓库。
+on:
+  schedule:
+    # UTC 20:17 = 北京时间 次日 04:17（避开整点高峰，GitHub cron 常有几分钟延迟）
+    - cron: '17 20 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: auto-update-dispatcher
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Dispatch playlist generation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run main.yml --repo "$GITHUB_REPOSITORY" --ref master
+          sleep 8
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow main.yml --limit 3
