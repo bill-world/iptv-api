@@ -1,0 +1,26 @@
+name: Bootstrap Pages
+
+# 一次性引导：用仓库内置 GITHUB_TOKEN（pages: write）开启 GitHub Pages，
+# 源设为 "GitHub Actions"。开启后可删除本工作流。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Enable Pages (workflow build)
+        id: pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Report
+        run: echo "pages_base_url=${{ steps.pages.outputs.base_url }}"
