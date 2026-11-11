@@ -2,10 +2,17 @@ name: Auto update playlist
 
 # 定时触发上游的 "Generate playlist manually"（main.yml）。
 # 生成结果只经 GitHub Pages 与 Release 发布，不提交回 Git 仓库。
+#
+# 为什么要两个 cron：GitHub 对公共仓库的 schedule 是“尽力而为”，
+# 实测会出现数小时延迟，甚至整天丢触发（2026-11-09 起连续 2 天未运行）。
+# 因此设两个时间点，并在派发前判断“最近 20 小时内是否已成功”，
+# 保证最多一天一跑，又不会因为丢一次触发就整天没有数据。
 on:
   schedule:
-    # UTC 20:17 = 北京时间 次日 04:17（避开整点高峰，GitHub cron 常有几分钟延迟）
+    # UTC 20:17 = 北京 次日 04:17
     - cron: '17 20 * * *'
+    # UTC 00:47 = 北京 08:47（兜底：若前一次被丢，这里补跑）
+    - cron: '47 0 * * *'
   workflow_dispatch:
 
 permissions:
@@ -21,10 +28,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Dispatch playlist generation
+      - name: Dispatch playlist generation (skip if succeeded within 20h)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
+          recent=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow main.yml --limit 20 \
+            --json conclusion,createdAt \
+            --jq '[.[] | select(.conclusion=="success") | select((now - (.createdAt|fromdateiso8601)) < 72000)] | length')
+          echo "successful runs within 20h: $recent"
+          if [ "$recent" -gt 0 ]; then
+            echo "::notice::近期已有成功运行，跳过本次派发"
+            exit 0
+          fi
           gh workflow run main.yml --repo "$GITHUB_REPOSITORY" --ref master
-          sleep 8
+          sleep 10
           gh run list --repo "$GITHUB_REPOSITORY" --workflow main.yml --limit 3
